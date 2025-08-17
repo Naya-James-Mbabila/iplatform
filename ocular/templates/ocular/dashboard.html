@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">
+        {% if user.is_staff %}
+        <i class="fas fa-user-md text-primary me-2"></i>Doctor Dashboard
+        {% else %}
+        <i class="fas fa-user-injured text-primary me-2"></i>My Health Portal
+        {% endif %}
+    </h4>
+    {% if not user.is_staff %}
+    <a href="{% url 'upload' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>New Analysis
+    </a>
+    {% endif %}
+</div>
+
+<!-- Dashboard Stats -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card-medical card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                <h5 class="card-title">
+                    {% if user.is_staff %}
+                        {{ patients.count }}
+                    {% else %}
+                        {{ images.count }}
+                    {% endif %}
+                </h5>
+                <p class="card-text text-muted mb-0">
+                    {% if user.is_staff %}Total Patients{% else %}My Tests{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card-medical card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                <h5 class="card-title">{{ pending_count|default:0 }}</h5>
+                <p class="card-text text-muted mb-0">Pending</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card-medical card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                <h5 class="card-title">{{ completed_count|default:0 }}</h5>
+                <p class="card-text text-muted mb-0">Completed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card-medical card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-calendar-day fa-2x text-info mb-2"></i>
+                <h5 class="card-title">{{ today_count|default:0 }}</h5>
+                <p class="card-text text-muted mb-0">Today</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Dashboard Content -->
+<div class="card-medical card">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center flex-wrap">
+            <h5 class="mb-0">
+                {% if user.is_staff %}
+                <i class="fas fa-users-cog text-primary me-2"></i>Patient Management
+                {% else %}
+                <i class="fas fa-history text-primary me-2"></i>My Analysis History
+                {% endif %}
+            </h5>
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <small class="text-muted">
+                    {% if user.is_staff %}
+                        {{ patients.count }} patients
+                    {% else %}
+                        {{ images.count }} records
+                    {% endif %}
+                </small>
+                {% if user.is_staff %}
+                <div class="d-flex align-items-center gap-3">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="showOnlyPending">
+                        <label class="form-check-label text-muted" for="showOnlyPending">
+                            Pending Only
+                        </label>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check" name="viewMode" id="expandAll" autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="expandAll">
+                            <i class="fas fa-expand-alt"></i>
+                        </label>
+                        <input type="radio" class="btn-check" name="viewMode" id="collapseAll" autocomplete="off" checked>
+                        <label class="btn btn-outline-secondary" for="collapseAll">
+                            <i class="fas fa-compress-alt"></i>
+                        </label>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="card-body p-0">
+        {% if user.is_staff %}
+            <!-- Doctor View: Patient-based Dashboard -->
+            {% if patients %}
+                <div class="patient-dashboard">
+                    {% for patient_data in patients %}
+                    <div class="patient-card border-bottom" data-patient-id="{{ patient_data.patient.id }}">
+                        <!-- Patient Header -->
+                        <div class="patient-header p-3 cursor-pointer" 
+                             data-bs-toggle="collapse" 
+                             data-bs-target="#patient-{{ patient_data.patient.id }}" 
+                             aria-expanded="false">
+                            <div class="row align-items-center">
+                                <!-- Patient Info -->
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center">
+                                        <div class="patient-avatar me-3">
+                                            <div class="avatar-circle">
+                                                <i class="fas fa-user"></i>
+                                            </div>
+                                        </div>
+                                        <div class="patient-details">
+                                            <h6 class="patient-name mb-1">
+                                                {{ patient_data.patient.get_full_name|default:patient_data.patient.username }}
+                                            </h6>
+                                            <div class="patient-contact">
+                                                <small class="text-muted d-block">
+                                                    <i class="fas fa-envelope me-1"></i>{{ patient_data.patient.email }}
+                                                </small>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-user-circle me-1"></i>{{ patient_data.patient.username }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Patient Stats -->
+                                <div class="col-md-4">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <div class="stat-box text-center">
+                                                <div class="stat-number text-primary">{{ patient_data.total_analyses }}</div>
+                                                <div class="stat-label">Total</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="stat-box text-center">
+                                                <div class="stat-number {% if patient_data.pending_analyses > 0 %}text-warning{% else %}text-muted{% endif %}">
+                                                    {{ patient_data.pending_analyses }}
+                                                </div>
+                                                <div class="stat-label">Pending</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="last-activity mt-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-1"></i>
+                                            Last: {{ patient_data.last_analysis|date:"M d, Y"|default:"No analyses" }}
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Status Badges & Toggle -->
+                                <div class="col-md-2 text-end">
+                                    <div class="patient-status mb-2">
+                                        {% if patient_data.pending_analyses > 0 %}
+                                        <span class="badge badge-warning-soft">
+                                            {{ patient_data.pending_analyses }} Pending
+                                        </span>
+                                        {% else %}
+                                        <span class="badge badge-success-soft">
+                                            Up to date
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="expand-toggle">
+                                        <i class="fas fa-chevron-down text-muted"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Patient Analysis Details (Collapsible) -->
+                        <div class="collapse" id="patient-{{ patient_data.patient.id }}">
+                            <div class="patient-analyses bg-light">
+                                {% if patient_data.analyses %}
+                                <div class="analyses-container p-3">
+                                    <div class="analyses-header mb-3">
+                                        <h6 class="mb-0 text-secondary">
+                                            <i class="fas fa-microscope me-1"></i>
+                                            Analysis History ({{ patient_data.analyses|length }})
+                                        </h6>
+                                    </div>
+                                    
+                                    <div class="analyses-grid">
+                                        {% for image in patient_data.analyses %}
+                                        <div class="analysis-item {% if not image.is_analyzed %}pending{% endif %}">
+                                            <div class="analysis-card">
+                                                <div class="analysis-header">
+                                                    <div class="analysis-id">
+                                                        <span class="badge badge-light">#{{ image.id }}</span>
+                                                    </div>
+                                                    <div class="analysis-status">
+                                                        {% if image.is_analyzed %}
+                                                        <span class="status-indicator completed">
+                                                            <i class="fas fa-check-circle"></i>
+                                                        </span>
+                                                        {% else %}
+                                                        <span class="status-indicator pending">
+                                                            <i class="fas fa-clock"></i>
+                                                        </span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="analysis-body">
+                                                    <div class="analysis-date">
+                                                        <strong>{{ image.uploaded_at|date:"M d, Y" }}</strong>
+                                                        <small class="text-muted d-block">{{ image.uploaded_at|time:"g:i A" }}</small>
+                                                    </div>
+                                                    
+                                                    <div class="analysis-result mt-2">
+                                                        {% if image.is_analyzed %}
+                                                        <small class="text-success">
+                                                            <i class="fas fa-chart-line me-1"></i>Results Available
+                                                        </small>
+                                                        {% else %}
+                                                        <small class="text-warning">
+                                                            <i class="fas fa-spinner me-1"></i>Processing...
+                                                        </small>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="analysis-footer">
+                                                    <a href="{% url 'analysis' image.id %}" 
+                                                       class="btn btn-sm {% if image.is_analyzed %}btn-primary{% else %}btn-outline-secondary{% endif %} w-100">
+                                                        <i class="fas {% if image.is_analyzed %}fa-eye{% else %}fa-hourglass-half{% endif %} me-1"></i>
+                                                        {% if image.is_analyzed %}Review Results{% else %}Check Status{% endif %}
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="empty-analyses text-center py-4">
+                                    <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                                    <h6 class="text-muted">No analyses found</h6>
+                                    <p class="text-muted small mb-0">This patient hasn't uploaded any analyses yet</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+            <div class="empty-state text-center py-5">
+                <i class="fas fa-users fa-4x text-muted mb-3"></i>
+                <h5>No patients found</h5>
+                <p class="text-muted">Patients will appear here once they upload their first analysis</p>
+            </div>
+            {% endif %}
+        {% else %}
+            <!-- Patient View: Personal Dashboard -->
+            {% if images %}
+                <div class="p-3">
+                    <div class="row">
+                        {% for image in images %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 analysis-card-patient {% if not image.is_analyzed %}border-warning{% endif %}">
+                                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Analysis #{{ image.id }}</h6>
+                                    <span class="badge {% if image.is_analyzed %}badge-success-soft{% else %}badge-warning-soft{% endif %}">
+                                        {% if image.is_analyzed %}Completed{% else %}Pending{% endif %}
+                                    </span>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="fas fa-calendar text-primary me-2"></i>
+                                            <span>{{ image.uploaded_at|date:"M d, Y" }}</span>
+                                        </div>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-clock text-muted me-2"></i>
+                                            <small class="text-muted">{{ image.uploaded_at|time:"g:i A" }}</small>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if image.is_analyzed %}
+                                    <div class="alert alert-success-soft py-2 border-0">
+                                        <small>
+                                            <i class="fas fa-check-circle me-1"></i>
+                                            Analysis completed and ready for review
+                                        </small>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-warning-soft py-2 border-0">
+                                        <small>
+                                            <i class="fas fa-hourglass-half me-1"></i>
+                                            Analysis in progress...
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="card-footer bg-white border-0">
+                                    <a href="{% url 'analysis' image.id %}" class="btn btn-primary btn-sm w-100">
+                                        <i class="fas fa-eye me-1"></i>
+                                        {% if image.is_analyzed %}View Results{% else %}Check Status{% endif %}
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+            <div class="empty-state text-center py-5">
+                <i class="fas fa-eye fa-4x text-muted mb-3"></i>
+                <h5>No analyses yet</h5>
+                <p class="text-muted">Upload your first ocular image to begin analysis</p>
+                <a href="{% url 'upload' %}" class="btn btn-primary btn-lg mt-3">
+                    <i class="fas fa-camera me-2"></i>Start Your First Analysis
+                </a>
+            </div>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<style>
+/* Patient Dashboard Styles */
+.patient-card {
+    transition: all 0.3s ease;
+}
+
+.patient-card:hover {
+    background-color: #f8f9fa;
+}
+
+.patient-header {
+    transition: background-color 0.2s ease;
+}
+
+.patient-header:hover {
+    background-color: #f8f9fa;
+}
+
+.patient-header[aria-expanded="true"] {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.patient-header[aria-expanded="true"] .expand-toggle .fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+.expand-toggle .fa-chevron-down {
+    transition: transform 0.2s ease;
+}
+
+/* Avatar Styles */
+.avatar-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+}
+
+/* Patient Details */
+.patient-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.patient-contact {
+    line-height: 1.3;
+}
+
+/* Stats */
+.stat-box {
+    padding: 8px;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+}
+
+.stat-number {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Badge Styles */
+.badge-success-soft {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.badge-warning-soft {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.badge-light {
+    background-color: #e9ecef;
+    color: #495057;
+}
+
+/* Analysis Grid */
+.analyses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.analysis-item {
+    transition: transform 0.2s ease;
+}
+
+.analysis-item:hover {
+    transform: translateY(-2px);
+}
+
+.analysis-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    border: 1px solid #e9ecef;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.analysis-item.pending .analysis-card {
+    border-left: 4px solid #ffc107;
+}
+
+.analysis-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.status-indicator {
+    font-size: 1.1rem;
+}
+
+.status-indicator.completed {
+    color: #28a745;
+}
+
+.status-indicator.pending {
+    color: #ffc107;
+}
+
+.analysis-date strong {
+    color: #2c3e50;
+    font-size: 0.95rem;
+}
+
+.analysis-result {
+    margin-top: auto;
+    margin-bottom: 1rem;
+}
+
+.analysis-footer {
+    margin-top: auto;
+}
+
+/* Alert Styles */
+.alert-success-soft {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.alert-warning-soft {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .patient-header .row {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .analyses-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stat-box {
+        margin-bottom: 10px;
+    }
+    
+    .btn-group {
+        display: none;
+    }
+}
+
+/* Cursor Pointer */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+/* Empty State */
+.empty-state {
+    padding: 3rem 1rem;
+}
+
+.empty-analyses {
+    border-top: 1px solid #e9ecef;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Show only pending toggle for doctors
+    const showOnlyPendingToggle = document.getElementById('showOnlyPending');
+    if (showOnlyPendingToggle) {
+        showOnlyPendingToggle.addEventListener('change', function() {
+            const patientCards = document.querySelectorAll('.patient-card');
+            patientCards.forEach(card => {
+                const pendingBadge = card.querySelector('.badge-warning-soft');
+                const pendingAnalysis = card.querySelector('.analysis-item.pending');
+                
+                if (this.checked) {
+                    // Show only patients with pending analyses
+                    if (!pendingBadge && !pendingAnalysis) {
+                        card.style.display = 'none';
+                    } else {
+                        card.style.display = 'block';
+                    }
+                } else {
+                    card.style.display = 'block';
+                }
+            });
+        });
+    }
+    
+    // Expand/Collapse All functionality
+    const expandAllBtn = document.getElementById('expandAll');
+    const collapseAllBtn = document.getElementById('collapseAll');
+    
+    if (expandAllBtn && collapseAllBtn) {
+        expandAllBtn.addEventListener('change', function() {
+            if (this.checked) {
+                document.querySelectorAll('.collapse').forEach(collapse => {
+                    const bsCollapse = new bootstrap.Collapse(collapse, { show: true });
+                });
+            }
+        });
+        
+        collapseAllBtn.addEventListener('change', function() {
+            if (this.checked) {
+                document.querySelectorAll('.collapse.show').forEach(collapse => {
+                    const bsCollapse = new bootstrap.Collapse(collapse, { hide: true });
+                });
+            }
+        });
+    }
+    
+    // Auto-refresh for pending analyses (every 30 seconds)
+    const hasPending = document.querySelector('.badge-warning-soft, .analysis-item.pending');
+    if (hasPending) {
+        setInterval(() => {
+            // Only refresh if there are still pending analyses
+            if (document.querySelector('.badge-warning-soft, .analysis-item.pending')) {
+                window.location.reload();
+            }
+        }, 30000);
+    }
+    
+    // Smooth scroll to expanded patient
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            setTimeout(() => {
+                const target = this.getAttribute('data-bs-target');
+                const element = document.querySelector(target);
+                if (element && element.classList.contains('show')) {
+                    element.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'nearest',
+                        inline: 'start'
+                    });
+                }
+            }, 350); 
+        });
+    });
+});
+</script>
+{% endblock %}

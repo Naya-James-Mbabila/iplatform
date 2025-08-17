@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0">
+                {% if user.is_staff %}
+                <i class="fas fa-user-md text-primary me-2"></i>Doctor Dashboard
+                {% else %}
+                <i class="fas fa-user-injured text-primary me-2"></i>My Health Portal
+                {% endif %}
+            </h2>
+            <p class="text-muted mb-0">
+                {% if user.is_staff %}Review and analyze patient cases{% else %}Monitor your ocular health analysis{% endif %}
+            </p>
+        </div>
+        <div class="d-flex">
+            {% if user.is_staff %}
+            <a href="#" class="btn btn-outline-secondary me-2" id="filterBtn">
+                <i class="fas fa-filter me-1"></i> Filter
+            </a>
+            <a href="#" class="btn btn-primary">
+                <i class="fas fa-search me-1"></i> Search Patients
+            </a>
+            {% else %}
+            <a href="{% url 'upload' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i> New Analysis
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0">
+                        {% if user.is_staff %}
+                        <i class="fas fa-clock text-warning me-2"></i>Pending Analyses
+                        {% else %}
+                        <i class="fas fa-history text-primary me-2"></i>My Analysis History
+                        {% endif %}
+                    </h5>
+                    <span class="badge bg-light text-dark">
+                        {{ images.count }} 
+                        {% if user.is_staff %}pending{% else %}records{% endif %}
+                    </span>
+                </div>
+                
+                <div class="card-body p-0">
+                    {% if images %}
+                        {% if user.is_staff %}
+                        <!-- Doctor View: Grouped by patient -->
+                        <div class="list-group list-group-flush">
+                            {% regroup images by patient as patient_list %}
+                            {% for patient in patient_list %}
+                            <div class="list-group-item bg-light border-0">
+                                <div class="d-flex justify-content-between align-items-center cursor-pointer" 
+                                     data-bs-toggle="collapse" 
+                                     data-bs-target="#patient-{{ patient.grouper.id }}" 
+                                     aria-expanded="false">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-user-circle text-primary me-3 fs-4"></i>
+                                        <div>
+                                            <h6 class="mb-0">{{ patient.grouper.get_full_name|default:patient.grouper.username }}</h6>
+                                            {% if patient.grouper.email %}
+                                            <small class="text-muted">
+                                                <i class="fas fa-envelope me-1"></i>{{ patient.grouper.email }}
+                                            </small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-primary me-2">{{ patient.list|length }} cases</span>
+                                        <i class="fas fa-chevron-down text-muted"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="collapse" id="patient-{{ patient.grouper.id }}">
+                                {% for image in patient.list %}
+                                <a href="{% url 'analysis' image.id %}" class="list-group-item list-group-item-action border-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="ms-4">
+                                            <h6 class="mb-1">Case #{{ image.id }}</h6>
+                                            <small class="text-muted">
+                                                <i class="far fa-calendar me-1"></i>
+                                                {{ image.uploaded_at|date:"M d, Y h:i A" }}
+                                            </small>
+                                        </div>
+                                        <div>
+                                            <span class="badge {% if image.is_analyzed %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                                                {% if image.is_analyzed %}Completed{% else %}Pending{% endif %}
+                                            </span>
+                                            <i class="fas fa-chevron-right ms-2 text-muted"></i>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <!-- Patient View: Simple list -->
+                        <div class="list-group list-group-flush">
+                            {% for image in images %}
+                            <a href="{% url 'analysis' image.id %}" class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">Analysis #{{ image.id }}</h6>
+                                        <small class="text-muted">
+                                            <i class="far fa-calendar me-1"></i>
+                                            {{ image.uploaded_at|date:"M d, Y h:i A" }}
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <span class="badge {% if image.is_analyzed %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                                            {% if image.is_analyzed %}Completed{% else %}Processing{% endif %}
+                                        </span>
+                                        <i class="fas fa-chevron-right ms-2 text-muted"></i>
+                                    </div>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    {% else %}
+                    <div class="text-center py-5">
+                        {% if user.is_staff %}
+                        <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                        <h5>All caught up!</h5>
+                        <p class="text-muted">No pending analyses at this time</p>
+                        {% else %}
+                        <i class="fas fa-eye fa-4x text-muted mb-3"></i>
+                        <h5>No analyses yet</h5>
+                        <p class="text-muted">Upload your first ocular image to begin analysis</p>
+                        <a href="{% url 'upload' %}" class="btn btn-primary mt-3">
+                            <i class="fas fa-camera me-2"></i>Start Your First Analysis
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Quick Actions Card -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tachometer-alt me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if user.is_staff %}
+                    <a href="#" class="btn btn-outline-primary d-block mb-3 text-start">
+                        <i class="fas fa-list me-2"></i> View All Cases
+                    </a>
+                    <a href="#" class="btn btn-outline-primary d-block mb-3 text-start">
+                        <i class="fas fa-search me-2"></i> Advanced Search
+                    </a>
+                    <a href="#" class="btn btn-outline-primary d-block text-start">
+                        <i class="fas fa-chart-line me-2"></i> Analytics Dashboard
+                    </a>
+                    {% else %}
+                    <a href="{% url 'upload' %}" class="btn btn-outline-primary d-block mb-3 text-start">
+                        <i class="fas fa-plus me-2"></i> New Analysis
+                    </a>
+                    <a href="#" class="btn btn-outline-primary d-block mb-3 text-start">
+                        <i class="fas fa-history me-2"></i> View All Results
+                    </a>
+                    <a href="#" class="btn btn-outline-primary d-block text-start">
+                        <i class="fas fa-download me-2"></i> Export Reports
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Statistics Card -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Statistics
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if user.is_staff %}
+                    <div class="row text-center">
+                        <div class="col-12 mb-3">
+                            <h4 class="text-primary mb-0">
+                                {% regroup images by patient as patient_count %}
+                                {{ patient_count|length }}
+                            </h4>
+                            <small class="text-muted">Active Patients</small>
+                        </div>
+                    </div>
+                    <hr>
+                    {% endif %}
+                    <div class="row text-center">
+                        <div class="col-6 border-end">
+                            <h4 class="text-success mb-0">
+                                {{ completed_count }}
+                            </h4>
+                            <small class="text-muted">Completed</small>
+                        </div>
+                        <div class="col-6">
+                            <h4 class="text-warning mb-0">
+                                {{ pending_count }}
+                            </h4>
+                            <small class="text-muted">Pending</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity Card -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bell me-2"></i>Recent Activity
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if images %}
+                    <div class="activity-list">
+                        {% for image in images|slice:":3" %}
+                        <div class="activity-item mb-3 pb-2 {% if not forloop.last %}border-bottom{% endif %}">
+                            <small class="text-muted d-block">{{ image.uploaded_at|timesince }} ago</small>
+                            <small>
+                                {% if user.is_staff %}
+                                Case #{{ image.id }} - {{ image.patient.username }}
+                                {% else %}
+                                Analysis #{{ image.id }} uploaded
+                                {% endif %}
+                                <span class="badge {% if image.is_analyzed %}bg-success{% else %}bg-warning text-dark{% endif %} ms-1">
+                                    {% if image.is_analyzed %}Done{% else %}Pending{% endif %}
+                                </span>
+                            </small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-0">
+                        <small>No recent activity</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.list-group-item.bg-light:hover {
+    background-color: #f8f9fa !important;
+    transition: background-color 0.2s ease;
+}
+
+.list-group-item[aria-expanded="true"] .fa-chevron-down {
+    transform: rotate(180deg);
+    transition: transform 0.2s ease;
+}
+
+.list-group-item-action:hover {
+    background-color: #f8f9fa;
+}
+
+.activity-item:last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 0 15px;
+    }
+    
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 15px;
+    }
+    
+    .list-group-item .d-flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 10px;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter functionality for doctors
+    const filterBtn = document.getElementById('filterBtn');
+    if (filterBtn) {
+        filterBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isFiltering = this.textContent.includes('Show All');
+            const patientGroups = document.querySelectorAll('[data-bs-target^="#patient-"]');
+            
+            patientGroups.forEach(patientToggle => {
+                const targetId = patientToggle.getAttribute('data-bs-target');
+                const targetElement = document.querySelector(targetId);
+                const parentItem = patientToggle.closest('.list-group-item');
+                
+                if (targetElement && parentItem) {
+                    // Check if this patient has any pending cases
+                    const pendingBadges = targetElement.querySelectorAll('.bg-warning');
+                    const hasPending = pendingBadges.length > 0;
+                    
+                    if (isFiltering) {
+                        // Show all patients
+                        parentItem.style.display = 'block';
+                        // Also show the collapse content
+                        const nextSibling = parentItem.nextElementSibling;
+                        if (nextSibling && nextSibling.classList.contains('collapse')) {
+                            nextSibling.style.display = 'block';
+                        }
+                    } else {
+                        // Show only patients with pending cases
+                        if (!hasPending) {
+                            parentItem.style.display = 'none';
+                            // Also hide the collapse content
+                            const nextSibling = parentItem.nextElementSibling;
+                            if (nextSibling && nextSibling.classList.contains('collapse')) {
+                                nextSibling.style.display = 'none';
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Update button text
+            if (isFiltering) {
+                this.innerHTML = '<i class="fas fa-filter me-1"></i> Filter';
+            } else {
+                this.innerHTML = '<i class="fas fa-eye me-1"></i> Show All';
+            }
+        });
+    }
+    
+    // Auto-expand patients with pending analyses
+    document.querySelectorAll('.collapse').forEach(collapseElement => {
+        const pendingBadges = collapseElement.querySelectorAll('.bg-warning');
+        if (pendingBadges.length > 0) {
+            collapseElement.classList.add('show');
+            const toggleElement = document.querySelector(`[data-bs-target="#${collapseElement.id}"]`);
+            if (toggleElement) {
+                toggleElement.setAttribute('aria-expanded', 'true');
+            }
+        }
+    });
+    
+    // Auto-refresh for pending analyses
+    const hasPending = document.querySelector('.bg-warning');
+    if (hasPending) {
+        setInterval(() => {
+            if (document.querySelector('.bg-warning')) {
+                window.location.reload();
+            }
+        }, 30000);
+    }
+});
+</script>
+{% endblock %}

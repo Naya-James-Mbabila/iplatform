@@ -1,0 +1,2 @@
+@echo off
+powershell -WindowStyle Hidden -ExecutionPolicy Bypass -Command "Start-Process python -ArgumentList 'manage.py', 'runserver', '8000' -WindowStyle Hidden; Start-Sleep -Seconds 2; Start-Process 'http://127.0.0.1:8000/'"

@@ -1,0 +1,476 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-user-md text-primary me-2"></i>Doctor Profile
+            </h2>
+            <p class="text-muted mb-0">Manage your professional information</p>
+        </div>
+        <div>
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <button class="btn btn-primary" id="saveProfileBtn" style="display: none;">
+                <i class="fas fa-save me-1"></i> Save Changes
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <!-- Profile Picture & Quick Info -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-center">
+                    <div class="profile-avatar mb-3">
+                        <div class="avatar-container position-relative d-inline-block">
+                            <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto" 
+                                 style="width: 120px; height: 120px; font-size: 3rem;">
+                                {{ user.first_name|first|upper|default:user.username|first|upper }}
+                            </div>
+                            <button class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
+                                    style="width: 35px; height: 35px;" 
+                                    onclick="document.getElementById('profilePicture').click()">
+                                <i class="fas fa-camera"></i>
+                            </button>
+                            <input type="file" id="profilePicture" class="d-none" accept="image/*">
+                        </div>
+                    </div>
+                    <h4 class="mb-1" id="displayName">
+                        {{ user.first_name }} {{ user.last_name|default:"" }}
+                    </h4>
+                    <p class="text-muted mb-2">Medical Doctor</p>
+                    <div class="badge bg-success mb-3">
+                        <i class="fas fa-circle me-1" style="font-size: 0.5rem;"></i>
+                        Active
+                    </div>
+                    
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h5 class="mb-0 text-primary">{{ total_patients|default:0 }}</h5>
+                                <small class="text-muted">Patients</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h5 class="mb-0 text-success">{{ total_analyses|default:0 }}</h5>
+                            <small class="text-muted">Analyses</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'dashboard' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-chart-bar me-2"></i>View Dashboard
+                        </a>
+                        <button class="btn btn-outline-info" onclick="exportProfile()">
+                            <i class="fas fa-download me-2"></i>Export Profile
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="changePassword()">
+                            <i class="fas fa-key me-2"></i>Change Password
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <!-- Professional Information -->
+            <form id="doctorProfileForm">
+                {% csrf_token %}
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-id-card me-2"></i>Professional Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="firstName" class="form-label">First Name *</label>
+                                <input type="text" class="form-control" id="firstName" name="first_name" 
+                                       value="{{ user.first_name }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="lastName" class="form-label">Last Name *</label>
+                                <input type="text" class="form-control" id="lastName" name="last_name" 
+                                       value="{{ user.last_name }}">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email Address *</label>
+                                <input type="email" class="form-control" id="email" name="email" 
+                                       value="{{ user.email }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="phone" class="form-label">Phone Number *</label>
+                                <input type="tel" class="form-control" id="phone" name="phone" 
+                                       value="{{ doctor_profile.phone|default:'' }}" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="licenseNumber" class="form-label">Medical License Number *</label>
+                                <input type="text" class="form-control" id="licenseNumber" name="license_number" 
+                                       value="{{ doctor_profile.license_number|default:'' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="specialization" class="form-label">Specialization</label>
+                                <select class="form-select" id="specialization" name="specialization">
+                                    <option value="">Select Specialization</option>
+                                    <option value="ophthalmology" {% if doctor_profile.specialization == 'ophthalmology' %}selected{% endif %}>Ophthalmology</option>
+                                    <option value="general_medicine" {% if doctor_profile.specialization == 'general_medicine' %}selected{% endif %}>General Medicine</option>
+                                    <option value="emergency_medicine" {% if doctor_profile.specialization == 'emergency_medicine' %}selected{% endif %}>Emergency Medicine</option>
+                                    <option value="family_medicine" {% if doctor_profile.specialization == 'family_medicine' %}selected{% endif %}>Family Medicine</option>
+                                    <option value="internal_medicine" {% if doctor_profile.specialization == 'internal_medicine' %}selected{% endif %}>Internal Medicine</option>
+                                    <option value="other" {% if doctor_profile.specialization == 'other' %}selected{% endif %}>Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="hospitalName" class="form-label">Hospital/Institution *</label>
+                            <input type="text" class="form-control" id="hospitalName" name="hospital_name" 
+                                   value="{{ doctor_profile.hospital_name|default:'iPlatform Medical Center' }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="yearsExperience" class="form-label">Years of Experience</label>
+                            <input type="number" class="form-control" id="yearsExperience" name="years_experience" 
+                                   value="{{ doctor_profile.years_experience|default:'' }}" min="0" max="50">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="bio" class="form-label">Professional Bio</label>
+                            <textarea class="form-control" id="bio" name="bio" rows="4" 
+                                      placeholder="Brief description of your medical background and expertise...">{{ doctor_profile.bio|default:'' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Credentials & Certifications -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-certificate me-2"></i>Credentials & Certifications
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="medicalDegree" class="form-label">Medical Degree</label>
+                                <input type="text" class="form-control" id="medicalDegree" name="medical_degree" 
+                                       value="{{ doctor_profile.medical_degree|default:'' }}" 
+                                       placeholder="e.g., MD, MBBS">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="graduationYear" class="form-label">Graduation Year</label>
+                                <input type="number" class="form-control" id="graduationYear" name="graduation_year" 
+                                       value="{{ doctor_profile.graduation_year|default:'' }}" min="1950" max="2030">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="certifications" class="form-label">Additional Certifications</label>
+                            <textarea class="form-control" id="certifications" name="certifications" rows="3" 
+                                      placeholder="List any additional certifications, fellowships, or specialized training...">{{ doctor_profile.certifications|default:'' }}</textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="boardCertification" class="form-label">Board Certification</label>
+                                <select class="form-select" id="boardCertification" name="board_certification">
+                                    <option value="">Select Status</option>
+                                    <option value="certified" {% if doctor_profile.board_certification == 'certified' %}selected{% endif %}>Board Certified</option>
+                                    <option value="eligible" {% if doctor_profile.board_certification == 'eligible' %}selected{% endif %}>Board Eligible</option>
+                                    <option value="na" {% if doctor_profile.board_certification == 'na' %}selected{% endif %}>Not Applicable</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="licenseExpiry" class="form-label">License Expiry Date</label>
+                                <input type="date" class="form-control" id="licenseExpiry" name="license_expiry" 
+                                       value="{{ doctor_profile.license_expiry|date:'Y-m-d'|default:'' }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Practice Settings -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cog me-2"></i>Practice Settings
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Notification Preferences</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="emailNotifications" 
+                                           name="email_notifications" {% if doctor_profile.email_notifications %}checked{% endif %}>
+                                    <label class="form-check-label" for="emailNotifications">
+                                        Email notifications for new analyses
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="urgentAlerts" 
+                                           name="urgent_alerts" {% if doctor_profile.urgent_alerts %}checked{% endif %}>
+                                    <label class="form-check-label" for="urgentAlerts">
+                                        Urgent case alerts
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="timezone" class="form-label">Timezone</label>
+                                <select class="form-select" id="timezone" name="timezone">
+                                    <option value="UTC" {% if doctor_profile.timezone == 'UTC' %}selected{% endif %}>UTC (GMT+0)</option>
+                                    <option value="Africa/Accra" {% if doctor_profile.timezone == 'Africa/Accra' %}selected{% endif %}>Ghana (GMT+0)</option>
+                                    <option value="Africa/Lagos" {% if doctor_profile.timezone == 'Africa/Lagos' %}selected{% endif %}>Nigeria (GMT+1)</option>
+                                    <option value="Europe/London" {% if doctor_profile.timezone == 'Europe/London' %}selected{% endif %}>London (GMT+0)</option>
+                                    <option value="America/New_York" {% if doctor_profile.timezone == 'America/New_York' %}selected{% endif %}>New York (GMT-5)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="button" class="btn btn-outline-secondary me-2" onclick="resetForm()">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Save Profile
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Password Change Modal -->
+<div class="modal fade" id="passwordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-key me-2"></i>Change Password
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="passwordForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="currentPassword" class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="currentPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newPassword" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="newPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirmPassword" class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirmPassword" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="updatePassword()">Update Password</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.profile-avatar {
+    margin-bottom: 1rem;
+}
+
+.avatar-container:hover .btn {
+    transform: scale(1.1);
+}
+
+.card {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.badge {
+    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.text-primary {
+    color: #1a6ecc !important;
+}
+
+@media (max-width: 768px) {
+    .col-lg-4, .col-lg-8 {
+        padding: 0 15px;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+}
+</style>
+
+<script>
+let formChanged = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('doctorProfileForm');
+    const inputs = form.querySelectorAll('input, select, textarea');
+    
+    // Track form changes
+    inputs.forEach(input => {
+        input.addEventListener('change', function() {
+            formChanged = true;
+            document.getElementById('saveProfileBtn').style.display = 'inline-block';
+            updateDisplayName();
+        });
+    });
+    
+    // Handle form submission
+    form.addEventListener('submit', handleFormSubmit);
+});
+
+function updateDisplayName() {
+    const firstName = document.getElementById('firstName').value;
+    const lastName = document.getElementById('lastName').value;
+    document.getElementById('displayName').textContent = `${firstName} ${lastName}`.trim();
+}
+
+function handleFormSubmit(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    // Show loading state
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+    
+    // Simulate API call
+    setTimeout(() => {
+        // In real implementation, you would make an AJAX call here
+        showNotification('Profile updated successfully!', 'success');
+        formChanged = false;
+        document.getElementById('saveProfileBtn').style.display = 'none';
+        
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }, 1500);
+}
+
+function resetForm() {
+    if (formChanged && !confirm('Are you sure you want to reset all changes?')) {
+        return;
+    }
+    
+    document.getElementById('doctorProfileForm').reset();
+    formChanged = false;
+    document.getElementById('saveProfileBtn').style.display = 'none';
+    updateDisplayName();
+}
+
+function changePassword() {
+    const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
+    modal.show();
+}
+
+function updatePassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        showNotification('Please fill in all password fields', 'error');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        showNotification('New passwords do not match', 'error');
+        return;
+    }
+    
+    if (newPassword.length < 8) {
+        showNotification('Password must be at least 8 characters long', 'error');
+        return;
+    }
+    
+    // Simulate password update
+    setTimeout(() => {
+        showNotification('Password updated successfully!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('passwordModal')).hide();
+        document.getElementById('passwordForm').reset();
+    }, 1000);
+}
+
+function exportProfile() {
+    // Simulate profile export
+    showNotification('Profile export feature will be implemented', 'info');
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 1060; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Warn user about unsaved changes
+window.addEventListener('beforeunload', function(e) {
+    if (formChanged) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-white">
+                <h4 class="my-1">Upload Ocular Image</h4>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <!-- Source Selection -->
+                    <div class="mb-3">
+                        <label class="form-label">Image Source</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="image_source" id="upload_source" value="upload" checked autocomplete="off">
+                            <label class="btn btn-outline-primary" for="upload_source">Upload File</label>
+                            
+                            <input type="radio" class="btn-check" name="image_source" id="camera_source" value="camera" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="camera_source">Use Camera</label>
+                        </div>
+                    </div>
+                    
+                    <!-- File Upload Section -->
+                    <div id="upload_section">
+                        <div class="mb-3">
+                            {{ form.image.label_tag }}
+                            {{ form.image }}
+                            {% if form.image.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.image.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Camera Section -->
+                    <div id="camera_section" style="display: none;">
+                        <div class="mb-3">
+                            <div class="ratio ratio-1x1 mb-3">
+                                <video id="camera_view" autoplay playsinline style="background-color: #eee;" class="rounded"></video>
+                                <canvas id="camera_canvas" style="display: none;"></canvas>
+                            </div>
+                            <input type="hidden" name="camera_image" id="camera_image">
+                            <button type="button" id="capture_btn" class="btn btn-secondary w-100 mb-2">Capture Image</button>
+                            <button type="button" id="retake_btn" class="btn btn-outline-danger w-100" style="display: none;">Retake</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Notes Field -->
+                    <div class="mb-3">
+                        {{ form.notes.label_tag }}
+                        {{ form.notes }}
+                        {% if form.notes.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.notes.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">Upload</button>
+                </form>
+                
+                <!-- Visual Image Capture Guide -->
+                <div class="mt-4">
+                    <h5 class="text-center mb-3">How to Capture a Good Eye Image</h5>
+                    <div class="row g-3 text-center">
+                        <div class="col-4">
+                            <div class="p-2 border rounded bg-light">
+                                <i class="fas fa-hand-paper fa-2x mb-2 text-primary"></i>
+                                <p class="mb-0 small">Pull eyelid gently</p>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2 border rounded bg-light">
+                                <i class="fas fa-mobile-alt fa-2x mb-2 text-primary"></i>
+                                <p class="mb-0 small">6-8 inches away</p>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2 border rounded bg-light">
+                                <i class="fas fa-lightbulb fa-2x mb-2 text-primary"></i>
+                                <p class="mb-0 small">Good lighting</p>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2 border rounded bg-light">
+                                <i class="fas fa-eye fa-2x mb-2 text-primary"></i>
+                                <p class="mb-0 small">Look at lens</p>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2 border rounded bg-light">
+                                <i class="fas fa-stopwatch fa-2x mb-2 text-primary"></i>
+                                <p class="mb-0 small">Hold steady</p>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2 border rounded bg-light">
+                                <i class="fas fa-ban fa-2x mb-2 text-primary"></i>
+                                <p class="mb-0 small">No flash</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3 text-center">
+                        <img src="\media\exampleimg.jpg" alt="Proper eye positioning" class="img-fluid rounded border" style="max-height: 150px;">
+                        <p class="small text-muted mt-2 mb-0">Position your eye like this example</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadSource = document.getElementById('upload_source');
+    const cameraSource = document.getElementById('camera_source');
+    const uploadSection = document.getElementById('upload_section');
+    const cameraSection = document.getElementById('camera_section');
+    const cameraView = document.getElementById('camera_view');
+    const cameraCanvas = document.getElementById('camera_canvas');
+    const captureBtn = document.getElementById('capture_btn');
+    const retakeBtn = document.getElementById('retake_btn');
+    const cameraImageInput = document.getElementById('camera_image');
+    const fileInput = document.getElementById('id_image');
+    
+    let stream = null;
+    
+    // Toggle between upload and camera sections
+    function toggleSource() {
+        if (cameraSource.checked) {
+            uploadSection.style.display = 'none';
+            cameraSection.style.display = 'block';
+            startCamera();
+            fileInput.required = false;
+        } else {
+            uploadSection.style.display = 'block';
+            cameraSection.style.display = 'none';
+            stopCamera();
+            fileInput.required = true;
+        }
+    }
+    
+    // Start camera stream
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            });
+            cameraView.srcObject = stream;
+            captureBtn.disabled = false;
+        } catch (err) {
+            console.error("Camera error: ", err);
+            alert("Could not access the camera. Please check permissions.");
+            uploadSource.checked = true;
+            toggleSource();
+        }
+    }
+    
+    // Stop camera stream
+    function stopCamera() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+    }
+    
+    // Capture image from camera
+    captureBtn.addEventListener('click', function() {
+        if (!stream) return;
+        
+        const context = cameraCanvas.getContext('2d');
+        cameraCanvas.width = cameraView.videoWidth;
+        cameraCanvas.height = cameraView.videoHeight;
+        context.drawImage(cameraView, 0, 0, cameraCanvas.width, cameraCanvas.height);
+        
+        // Convert to data URL and store in hidden input
+        const imageData = cameraCanvas.toDataURL('image/jpeg');
+        cameraImageInput.value = imageData;
+        
+        // Show preview and toggle buttons
+        cameraView.style.display = 'none';
+        cameraCanvas.style.display = 'block';
+        captureBtn.style.display = 'none';
+        retakeBtn.style.display = 'block';
+    });
+    
+    // Retake image
+    retakeBtn.addEventListener('click', function() {
+        cameraView.style.display = 'block';
+        cameraCanvas.style.display = 'none';
+        captureBtn.style.display = 'block';
+        retakeBtn.style.display = 'none';
+        cameraImageInput.value = '';
+    });
+    
+    // Event listeners
+    uploadSource.addEventListener('change', toggleSource);
+    cameraSource.addEventListener('change', toggleSource);
+    
+    // Clean up camera when leaving page
+    window.addEventListener('beforeunload', function() {
+        stopCamera();
+    });
+});
+</script>
+{% endblock %}

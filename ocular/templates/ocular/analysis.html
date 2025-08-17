@@ -1,0 +1,1253 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-eye text-primary me-2"></i>Ocular Analysis Report
+            </h2>
+            <p class="text-muted mb-0">
+                Test #{{ image.id }} • {{ image.uploaded_at|date:"F d, Y at H:i" }}
+                {% if not user.is_staff %}
+                    <!-- 
+                        CORRECTION 1: Changed 'image.user' to 'image.patient'.
+                        The error 'VariableDoesNotExist' indicated that the OcularImage model
+                        does not have a field named 'user'. The correct field name that links
+                        the image to a patient (User model) is likely 'patient'.
+                        If your model uses a different name (e.g., 'uploader'), change 'patient' to that name.
+                    -->
+                    • Patient: {{ image.patient.get_full_name|default:image.patient.username }}
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <button class="btn btn-primary" onclick="window.print()" id="printBtn" style="display: none;">
+                <i class="fas fa-print me-1"></i> Print Report
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-5">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-image me-2"></i>Submitted Image
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="image-container p-3">
+                        <img src="{{ image.image.url }}" class="img-fluid rounded border" alt="Ocular image for analysis">
+                    </div>
+                    <div class="p-3 border-top text-center">
+                        <div class="d-flex justify-content-between small mb-3">
+                            <span>Uploaded: {{ image.uploaded_at|date:"M d, Y H:i" }}</span>
+                            <span>{{ image.image.width }}×{{ image.image.height }} px</span>
+                        </div>
+                        
+                        {% if not image.is_analyzed %}
+                        <button class="btn btn-success btn-lg" onclick="startAnalysis()" id="analyzeBtn">
+                            <i class="fas fa-microscope me-2"></i>Analyze Image
+                        </button>
+                        {% else %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>Analysis completed
+                        </div>
+                        {% endif %}
+                        
+                        <div class="loading-container mt-4" id="loadingSpinner" style="display: none;">
+                            <div class="circular-progress">
+                                <svg class="progress-circle" width="120" height="120">
+                                    <circle class="progress-background" cx="60" cy="60" r="50"></circle>
+                                    <circle class="progress-bar" cx="60" cy="60" r="50" id="progressCircle"></circle>
+                                </svg>
+                                <div class="progress-content">
+                                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                                    <div class="progress-icon">
+                                        <i class="fas fa-microscope"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="loading-text mt-3">
+                                <h6 class="mb-2 text-success">Analyzing Eye Regions</h6>
+                                <p class="text-muted small mb-1" id="loadingStage">Initializing analysis...</p>
+                                <div class="progress mt-2" style="height: 4px;">
+                                    <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
+                                         style="width: 0%" id="stageProgress"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Doctor Feedback Section -->
+            {% if user.is_staff %}
+            <div class="card shadow-sm mb-4" id="doctorFeedbackSection">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-md me-2"></i>Doctor's Assessment & Report
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="doctorFeedbackForm" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="image_id" value="{{ image.id }}">
+                        
+                        <div class="mb-3">
+                            <label for="doctorComments" class="form-label">
+                                <i class="fas fa-comments me-1"></i>Clinical Comments & Notes
+                            </label>
+                            <textarea class="form-control" id="doctorComments" name="doctor_comments" 
+                                      rows="6" placeholder="Enter your clinical assessment, observations, and recommendations...">{{ image.doctor_comments|default:'' }}</textarea>
+                            <div class="form-text">
+                                These comments will be visible to the patient and included in their medical record.
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="clinicalDiagnosis" class="form-label">
+                                <i class="fas fa-stethoscope me-1"></i>Clinical Diagnosis
+                            </label>
+                            <select class="form-select" id="clinicalDiagnosis" name="clinical_diagnosis">
+                                <option value="">Select diagnosis...</option>
+                                <option value="normal" {% if image.clinical_diagnosis == 'normal' %}selected{% endif %}>Normal - No abnormalities detected</option>
+                                <option value="mild_conjunctivitis" {% if image.clinical_diagnosis == 'mild_conjunctivitis' %}selected{% endif %}>Mild Conjunctivitis</option>
+                                <option value="moderate_conjunctivitis" {% if image.clinical_diagnosis == 'moderate_conjunctivitis' %}selected{% endif %}>Moderate Conjunctivitis</option>
+                                <option value="severe_conjunctivitis" {% if image.clinical_diagnosis == 'severe_conjunctivitis' %}selected{% endif %}>Severe Conjunctivitis</option>
+                                <option value="allergic_reaction" {% if image.clinical_diagnosis == 'allergic_reaction' %}selected{% endif %}>Allergic Reaction</option>
+                                <option value="dry_eye" {% if image.clinical_diagnosis == 'dry_eye' %}selected{% endif %}>Dry Eye Syndrome</option>
+                                <option value="jaundice_suspected" {% if image.clinical_diagnosis == 'jaundice_suspected' %}selected{% endif %}>Jaundice (Suspected)</option>
+                                <option value="anemia_suspected" {% if image.clinical_diagnosis == 'anemia_suspected' %}selected{% endif %}>Anemia (Suspected)</option>
+                                <option value="requires_further_investigation" {% if image.clinical_diagnosis == 'requires_further_investigation' %}selected{% endif %}>Requires Further Investigation</option>
+                                <option value="other" {% if image.clinical_diagnosis == 'other' %}selected{% endif %}>Other (specify in comments)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="urgencyLevel" class="form-label">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Urgency Level
+                                </label>
+                                <select class="form-select" id="urgencyLevel" name="urgency_level">
+                                    <option value="routine" {% if image.urgency_level == 'routine' %}selected{% endif %}>Routine Follow-up</option>
+                                    <option value="monitor" {% if image.urgency_level == 'monitor' %}selected{% endif %}>Monitor Closely</option>
+                                    <option value="schedule_soon" {% if image.urgency_level == 'schedule_soon' %}selected{% endif %}>Schedule Appointment Soon</option>
+                                    <option value="urgent" {% if image.urgency_level == 'urgent' %}selected{% endif %}>Urgent - See Doctor ASAP</option>
+                                    <option value="emergency" {% if image.urgency_level == 'emergency' %}selected{% endif %}>Emergency - Immediate Attention</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="followUpDays" class="form-label">
+                                    <i class="fas fa-calendar me-1"></i>Follow-up In (Days)
+                                </label>
+                                <input type="number" class="form-control" id="followUpDays" name="follow_up_days" 
+                                       value="{{ image.follow_up_days|default:'' }}" placeholder="e.g., 7, 14, 30">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="reportFile" class="form-label">
+                                <i class="fas fa-file-pdf me-1"></i>Attach Medical Report (PDF)
+                            </label>
+                            <input type="file" class="form-control" id="reportFile" name="report_file" 
+                                   accept=".pdf">
+                            <div class="form-text">
+                                Optional: Upload a detailed medical report or prescription (PDF only, max 5MB)
+                            </div>
+                            {% if image.report_file %}
+                            <div class="current-file mt-2">
+                                <div class="alert alert-info py-2">
+                                    <i class="fas fa-file-pdf me-2"></i>
+                                    Current file: <a href="{{ image.report_file.url }}" target="_blank" class="alert-link">View Report</a>
+                                    <!-- Add a button to remove file if needed -->
+                                </div>
+                            </div>
+                            {% endif %}
+                            <div id="filePreview" style="display: none;" class="mt-2">
+                                <div class="alert alert-success py-2">
+                                    <i class="fas fa-file-pdf me-2"></i>
+                                    New file selected: <span id="fileName"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary" onclick="clearForm()">
+                                <i class="fas fa-undo me-1"></i>Clear
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Save Assessment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-7">
+            <!-- Doctor's Assessment Display (for patients) -->
+            {% if not user.is_staff and image.is_analyzed and image.doctor_comments %}
+            <div class="card shadow-sm mb-4 border-primary">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-md me-2"></i>Doctor's Assessment
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if image.clinical_diagnosis %}
+                    <div class="mb-3">
+                        <h6 class="text-primary mb-2">
+                            <i class="fas fa-stethoscope me-1"></i>Clinical Diagnosis
+                        </h6>
+                        <div class="diagnosis-badge mb-2">
+                            {% if image.clinical_diagnosis == 'normal' %}
+                            <span class="badge bg-success fs-6 px-3 py-2">Normal - No abnormalities detected</span>
+                            {% elif 'conjunctivitis' in image.clinical_diagnosis %}
+                            <span class="badge bg-warning fs-6 px-3 py-2">{{ image.get_clinical_diagnosis_display }}</span>
+                            {% elif image.clinical_diagnosis == 'urgent' or image.clinical_diagnosis == 'emergency' %}
+                            <span class="badge bg-danger fs-6 px-3 py-2">{{ image.get_clinical_diagnosis_display }}</span>
+                            {% else %}
+                            <span class="badge bg-info fs-6 px-3 py-2">{{ image.get_clinical_diagnosis_display }}</span>
+                            {% endif %}
+                        </div>
+                        {% if image.urgency_level and image.urgency_level != 'routine' %}
+                        <div class="urgency-indicator">
+                            {% if image.urgency_level == 'emergency' %}
+                            <span class="badge bg-danger">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Emergency - Immediate Attention Required
+                            </span>
+                            {% elif image.urgency_level == 'urgent' %}
+                            <span class="badge bg-warning">
+                                <i class="fas fa-clock me-1"></i>Urgent - See Doctor ASAP
+                            </span>
+                            {% elif image.urgency_level == 'schedule_soon' %}
+                            <span class="badge bg-info">
+                                <i class="fas fa-calendar me-1"></i>Schedule Appointment Soon
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="doctor-comments">
+                        <h6 class="text-primary mb-2">
+                            <i class="fas fa-comments me-1"></i>Clinical Notes
+                        </h6>
+                        <div class="comments-content">
+                            <p class="mb-0">{{ image.doctor_comments|linebreaks }}</p>
+                        </div>
+                    </div>
+                    
+                    {% if image.follow_up_days %}
+                    <div class="follow-up-info mt-3 pt-3 border-top">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar-check me-1"></i>
+                            Recommended follow-up: {{ image.follow_up_days }} days
+                        </small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if image.report_file %}
+                    <div class="report-file mt-3 pt-3 border-top">
+                        <h6 class="text-primary mb-2">
+                            <i class="fas fa-file-pdf me-1"></i>Medical Report
+                        </h6>
+                        <a href="{{ image.report_file.url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-download me-1"></i>Download Report (PDF)
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Last updated: {{ image.updated_at|date:"F d, Y at H:i" }}
+                    </small>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div id="analysisResults" style="{% if image.is_analyzed %}display: block;{% else %}display: none;{% endif %}">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clipboard-check me-2"></i>Clinical Assessment
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-success fs-6 px-3 py-2 me-3" id="overallStatusBadge">
+                                <i class="fas fa-check-circle me-1"></i> Normal
+                            </span>
+                            <span class="badge bg-light text-dark fs-6 px-3 py-2" id="riskLevelBadge">
+                                Risk Level: Low
+                            </span>
+                        </div>
+                        <div class="alert alert-light border-start border-primary border-4">
+                            <i class="fas fa-info-circle text-primary me-2"></i>
+                            <span id="analysisInfo">Analysis completed</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>Quantitative Analysis
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-4">
+                                <div class="analysis-metric">
+                                    <div class="metric-header d-flex align-items-center mb-2">
+                                        <div class="metric-icon bg-danger bg-opacity-10 me-3">
+                                            <i class="fas fa-circle text-danger"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">Redness</h6>
+                                            <small class="text-muted">Conjunctival Hyperemia</small>
+                                        </div>
+                                    </div>
+                                    <div class="metric-score mb-2">
+                                        <span class="h4 text-danger" id="rednessScore">0.0%</span>
+                                    </div>
+                                    <div class="progress mb-2" style="height: 8px;">
+                                        <div class="progress-bar bg-danger" style="width: 0%" id="rednessProgress"></div>
+                                    </div>
+                                    <small class="text-muted" id="rednessStatus">Normal range</small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="analysis-metric">
+                                    <div class="metric-header d-flex align-items-center mb-2">
+                                        <div class="metric-icon bg-warning bg-opacity-10 me-3">
+                                            <i class="fas fa-circle text-warning"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">Yellowing</h6>
+                                            <small class="text-muted">Scleral Icterus</small>
+                                        </div>
+                                    </div>
+                                    <div class="metric-score mb-2">
+                                        <span class="h4 text-warning" id="yellowingScore">0.0%</span>
+                                    </div>
+                                    <div class="progress mb-2" style="height: 8px;">
+                                        <div class="progress-bar bg-warning" style="width: 0%" id="yellowingProgress"></div>
+                                    </div>
+                                    <small class="text-muted" id="yellowingStatus">Normal range</small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="analysis-metric">
+                                    <div class="metric-header d-flex align-items-center mb-2">
+                                        <div class="metric-icon bg-info bg-opacity-10 me-3">
+                                            <i class="fas fa-circle text-info"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">Pallor</h6>
+                                            <small class="text-muted">Conjunctival Pallor</small>
+                                        </div>
+                                    </div>
+                                    <div class="metric-score mb-2">
+                                        <span class="h4 text-info" id="pallorScore">0.0%</span>
+                                    </div>
+                                    <div class="progress mb-2" style="height: 8px;">
+                                        <div class="progress-bar bg-info" style="width: 0%" id="pallorProgress"></div>
+                                    </div>
+                                    <small class="text-muted" id="pallorStatus">Normal range</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4" id="clinicalFindings" style="display: none;">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-stethoscope me-2"></i>Clinical Findings
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="findings-list" id="findingsList"></div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-lightbulb me-2"></i>Medical Recommendations
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="recommendations-list" id="recommendationsList">
+                            <div class="recommendation-item d-flex align-items-start mb-3">
+                                <div class="recommendation-icon me-3 mt-1">
+                                    <i class="fas fa-check-circle text-success"></i>
+                                </div>
+                                <div class="recommendation-content">
+                                    <p class="mb-0">Continue routine monitoring</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4" id="eyeDataSection" style="display: none;">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-eye me-2"></i>Individual Eye Analysis
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="eyeDataContainer"></div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4" id="aiExplanationSection" style="display: none;">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-robot me-2"></i>AI Professional Analysis
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="ai-explanation">
+                            <p class="mb-0" id="aiExplanationText"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Technical Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row small" id="technicalInfo">
+                            <div class="col-md-6 mb-2">
+                                <span class="text-muted">Analysis completed:</span>
+                                <span id="analysisTimestamp">{{ image.analyzed_at|date:"M d, Y H:i"|default:"Pending..." }}</span>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <span class="text-muted">Image dimensions:</span>
+                                <span>{{ image.image.width }} × {{ image.image.height }} px</span>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <span class="text-muted">Eyes detected:</span>
+                                <span id="eyesDetected">{{ image.eyes_detected|default:0 }}</span>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <span class="text-muted">Analysis engine:</span>
+                                <span>EyeAnalyzer v2.0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm" id="errorSection" style="display: none;">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h4 class="mb-3">Analysis Error</h4>
+                    <p class="text-muted mb-4" id="errorMessage">
+                        Unable to process the uploaded image. Please ensure the image contains clear eye regions and try again.
+                    </p>
+                    <div class="d-flex justify-content-center">
+                        <a href="{% url 'upload' %}" class="btn btn-primary me-2">
+                            <i class="fas fa-upload me-1"></i> Try Again
+                        </a>
+                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-home me-1"></i> Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-light border-0 bg-light">
+                <div class="d-flex">
+                    <i class="fas fa-shield-alt text-muted mt-1 me-3"></i>
+                    <div>
+                        <p class="small mb-1"><strong>Medical Disclaimer:</strong></p>
+                        <p class="small mb-0">This automated analysis is for informational and screening purposes only. It should not replace professional medical examination or diagnosis. Please consult with a qualified healthcare provider for proper medical evaluation and treatment recommendations.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ... Your existing CSS styles ... */
+.image-container {
+    background-color: #f8f9fa;
+    text-align: center;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+.image-container img {
+    max-height: 400px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Enhanced Loading Container */
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 20px;
+}
+
+.circular-progress {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin-bottom: 20px;
+}
+
+.progress-circle {
+    transform: rotate(-90deg);
+    width: 120px;
+    height: 120px;
+}
+
+.progress-background {
+    fill: none;
+    stroke: #e9ecef;
+    stroke-width: 8;
+}
+
+.progress-bar {
+    fill: none;
+    stroke: #28a745;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 314.159; /* 2 * π * 50 */
+    stroke-dashoffset: 314.159;
+    transition: stroke-dashoffset 0.3s ease;
+    filter: drop-shadow(0 0 6px rgba(40, 167, 69, 0.3));
+}
+
+.progress-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.progress-percentage {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #28a745;
+    line-height: 1;
+    margin-bottom: 5px;
+}
+
+.progress-icon {
+    color: #28a745;
+    font-size: 1.2rem;
+    animation: pulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+    from {
+        opacity: 0.6;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+}
+
+.loading-text {
+    text-align: center;
+    max-width: 300px;
+}
+
+.loading-text h6 {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.loading-text .progress {
+    border-radius: 10px;
+    background-color: #e9ecef;
+    height: 6px;
+}
+
+.loading-text .progress-bar {
+    border-radius: 10px;
+    background: linear-gradient(45deg, #28a745, #20c997);
+}
+
+.analysis-metric {
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    padding: 20px;
+    height: 100%;
+    border: 1px solid #e9ecef;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.analysis-metric:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.metric-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.metric-score {
+    font-weight: 600;
+}
+
+.progress {
+    border-radius: 10px;
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    border-radius: 10px;
+}
+
+.finding-item, .recommendation-item {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    border-left: 4px solid #007bff;
+}
+
+.recommendation-item {
+    border-left-color: #28a745;
+}
+
+.recommendation-item.urgent {
+    border-left-color: #dc3545;
+    background-color: #fff5f5;
+}
+
+.recommendation-item.warning {
+    border-left-color: #ffc107;
+    background-color: #fffbf0;
+}
+
+.eye-analysis-card {
+    background-color: #f8f9fa;
+    transition: transform 0.2s ease;
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid #e9ecef;
+}
+
+.eye-analysis-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.eye-metric {
+    font-size: 0.9rem;
+}
+
+.metric-name {
+    font-weight: 500;
+}
+
+.ai-explanation {
+    background-color: #f0f7ff;
+    border-radius: 8px;
+    padding: 20px;
+    border-left: 4px solid #007bff;
+}
+
+/* Doctor Feedback Styles */
+.doctor-comments {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    border-left: 4px solid #007bff;
+}
+
+.comments-content {
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.diagnosis-badge {
+    margin-bottom: 10px;
+}
+
+.urgency-indicator {
+    margin-top: 8px;
+}
+
+.current-file {
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+/* Form Styling */
+#doctorFeedbackForm .form-control, 
+#doctorFeedbackForm .form-select {
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+}
+
+#doctorFeedbackForm .form-control:focus, 
+#doctorFeedbackForm .form-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+#doctorComments {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.file-upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    transition: border-color 0.2s ease;
+}
+
+.file-upload-area:hover {
+    border-color: #007bff;
+}
+
+.file-upload-area.dragover {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    .container-fluid, .container-fluid * {
+        visibility: visible;
+    }
+    .container-fluid {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    .btn, .alert-light, #doctorFeedbackSection, .d-flex.justify-content-between.align-items-center > div:last-child {
+        display: none !important;
+    }
+    .card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+    }
+    .col-lg-5, .col-lg-7 {
+        width: 50%;
+        float: left;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .analysis-metric {
+        margin-bottom: 20px;
+    }
+    
+    #doctorFeedbackForm .row .col-md-6 {
+        margin-bottom: 15px;
+    }
+}
+</style>
+
+<script>
+let isAnalyzing = false;
+let progressInterval;
+let stageInterval;
+let analysisStartTime;
+
+// Analysis stages with realistic timing
+const analysisStages = [
+    { text: "Initializing analysis...", duration: 2000 },
+    { text: "Loading eye detection models...", duration: 4000 },
+    { text: "Detecting eye regions...", duration: 6000 },
+    { text: "Extracting color features...", duration: 8000 },
+    { text: "Analyzing conjunctival hyperemia...", duration: 5000 },
+    { text: "Measuring scleral icterus...", duration: 4000 },
+    { text: "Assessing conjunctival pallor...", duration: 3000 },
+    { text: "Generating clinical assessment...", duration: 3000 },
+    { text: "Finalizing results...", duration: 2000 }
+];
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    {% if image.is_analyzed %}
+        loadExistingResults();
+    {% endif %}
+    
+    setupDoctorFeedbackForm();
+    setupFileUpload();
+});
+
+function startAnalysis() {
+    if (isAnalyzing) return;
+    
+    isAnalyzing = true;
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    
+    analyzeBtn.disabled = true;
+    analyzeBtn.innerHTML = '<i class="fas fa-cog fa-spin me-2"></i>Analyzing...';
+    loadingSpinner.style.display = 'block';
+    
+    startProgressAnimation();
+    
+    const imageId = {{ image.id }};
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch(`/analyze/${imageId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            action: 'analyze'
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        const elapsedTime = Date.now() - analysisStartTime;
+        const remainingTime = Math.max(0, 30000 - elapsedTime);
+        setTimeout(() => {
+            completeAnalysis(data);
+        }, remainingTime);
+    })
+    .catch(error => {
+        const elapsedTime = Date.now() - analysisStartTime;
+        const remainingTime = Math.max(0, 30000 - elapsedTime);
+        setTimeout(() => {
+            console.error('Analysis Error:', error);
+            completeAnalysis({
+                success: false,
+                error: `An error occurred during analysis. ${error.message}`
+            });
+        }, remainingTime);
+    });
+}
+
+function startProgressAnimation() {
+    const progressCircle = document.getElementById('progressCircle');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const loadingStage = document.getElementById('loadingStage');
+    const stageProgress = document.getElementById('stageProgress');
+    
+    const totalDuration = 30000; // 30 seconds
+    const updateInterval = 100;
+    const totalSteps = totalDuration / updateInterval;
+    
+    let currentStep = 0;
+    let currentStageIndex = 0;
+    let stageStartTime = Date.now();
+    
+    analysisStartTime = Date.now();
+    
+    loadingStage.textContent = analysisStages[0].text;
+    stageProgress.style.width = '0%';
+    
+    progressInterval = setInterval(() => {
+        currentStep++;
+        const progressPercentValue = Math.min(100, (currentStep / totalSteps) * 100);
+        
+        const circumference = 2 * Math.PI * 50;
+        const offset = circumference - (progressPercentValue / 100) * circumference;
+        progressCircle.style.strokeDashoffset = offset;
+        progressPercentage.textContent = `${Math.floor(progressPercentValue)}%`;
+        
+        const elapsedTimeInStage = Date.now() - stageStartTime;
+        const currentStage = analysisStages[currentStageIndex];
+        const stagePercent = Math.min(100, (elapsedTimeInStage / currentStage.duration) * 100);
+        stageProgress.style.width = `${stagePercent}%`;
+        
+        if (elapsedTimeInStage >= currentStage.duration && currentStageIndex < analysisStages.length - 1) {
+            currentStageIndex++;
+            stageStartTime = Date.now();
+            loadingStage.textContent = analysisStages[currentStageIndex].text;
+            stageProgress.style.width = '0%';
+        }
+        
+        if (progressPercentValue >= 100) {
+            clearInterval(progressInterval);
+            progressPercentage.textContent = '100%';
+            loadingStage.textContent = 'Finalizing...';
+            stageProgress.style.width = '100%';
+        }
+    }, updateInterval);
+}
+
+function completeAnalysis(data) {
+    if (progressInterval) clearInterval(progressInterval);
+    
+    document.getElementById('loadingSpinner').style.display = 'none';
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    if (analyzeBtn) {
+        // Replace button with "Analysis Completed" badge after successful run
+        const completionBadge = document.createElement('div');
+        completionBadge.className = 'alert alert-success';
+        completionBadge.innerHTML = '<i class="fas fa-check-circle me-2"></i>Analysis completed';
+        analyzeBtn.parentNode.replaceChild(completionBadge, analyzeBtn);
+    }
+    
+    if (data.success) {
+        document.getElementById('analysisResults').style.display = 'block';
+        document.getElementById('printBtn').style.display = 'inline-block';
+        updateResults(data.results);
+    } else {
+        showError(data.error || 'An unknown error occurred during analysis.');
+    }
+    isAnalyzing = false;
+}
+
+
+function loadExistingResults() {
+    const analysisResults = document.getElementById('analysisResults');
+    const printBtn = document.getElementById('printBtn');
+    
+    analysisResults.style.display = 'block';
+    printBtn.style.display = 'inline-block';
+    
+    // Use Django template variables to populate existing data
+    // The default filter handles cases where scores might be None or 0
+    updateMetric('redness', {{ image.redness_score|default:0 }});
+    updateMetric('yellowing', {{ image.yellowing_score|default:0 }});
+    updateMetric('pallor', {{ image.pallor_score|default:0 }});
+
+    // You can add similar logic here to populate other dynamic fields
+    // like recommendations, findings, etc., if they are saved to the 'image' model.
+}
+
+function updateResults(data) {
+    const assessment = data.overall_assessment;
+    
+    updateOverallStatus(assessment.status, assessment.risk_level);
+    updateScores(assessment.scores);
+    
+    if (assessment.concerns && assessment.concerns.length > 0) {
+        showFindings(assessment.concerns);
+    } else {
+        document.getElementById('clinicalFindings').style.display = 'none';
+    }
+    
+    updateRecommendations(assessment.recommendations);
+    
+    if (data.eye_data && data.eye_data.length > 0) {
+        showEyeData(data.eye_data);
+    } else {
+        document.getElementById('eyeDataSection').style.display = 'none';
+    }
+    
+    if (data.ai_explanation) {
+        showAIExplanation(data.ai_explanation);
+    } else {
+        document.getElementById('aiExplanationSection').style.display = 'none';
+    }
+    
+    updateTechnicalInfo(data.metadata);
+}
+
+function updateOverallStatus(status, riskLevel) {
+    const statusBadge = document.getElementById('overallStatusBadge');
+    const riskBadge = document.getElementById('riskLevelBadge');
+    
+    const statusMap = {
+        'normal': { class: 'bg-success', icon: 'fa-check-circle', text: 'Normal' },
+        'mild_abnormality': { class: 'bg-warning', icon: 'fa-exclamation-triangle', text: 'Mild Findings' },
+        'significant_abnormality': { class: 'bg-danger', icon: 'fa-exclamation-circle', text: 'Significant Findings' }
+    };
+    
+    const currentStatus = statusMap[status] || statusMap['normal'];
+    
+    statusBadge.className = `badge ${currentStatus.class} fs-6 px-3 py-2 me-3`;
+    statusBadge.innerHTML = `<i class="fas ${currentStatus.icon} me-1"></i> ${currentStatus.text}`;
+    
+    riskBadge.textContent = `Risk Level: ${riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)}`;
+}
+
+function updateScores(scores) {
+    updateMetric('redness', scores.redness);
+    updateMetric('yellowing', scores.yellowing);
+    updateMetric('pallor', scores.pallor);
+}
+
+function updateMetric(metric, score) {
+    const scoreValue = parseFloat(score) || 0;
+    document.getElementById(`${metric}Score`).textContent = `${scoreValue.toFixed(1)}%`;
+    document.getElementById(`${metric}Progress`).style.width = `${Math.min(scoreValue, 100)}%`;
+    
+    let status = 'Normal range';
+    if (metric === 'redness') {
+        if (scoreValue >= 35) status = 'Severe elevation';
+        else if (scoreValue >= 20) status = 'Moderate elevation';
+        else if (scoreValue >= 8) status = 'Mild elevation';
+    } else if (metric === 'yellowing') {
+        if (scoreValue >= 25) status = 'Significant presence';
+        else if (scoreValue >= 15) status = 'Moderate presence';
+        else if (scoreValue >= 5) status = 'Mild presence';
+    } else if (metric === 'pallor') {
+        if (scoreValue >= 60) status = 'Significant pallor';
+        else if (scoreValue >= 40) status = 'Moderate pallor';
+        else if (scoreValue >= 20) status = 'Mild pallor';
+    }
+    
+    document.getElementById(`${metric}Status`).textContent = status;
+}
+
+function showFindings(concerns) {
+    const findingsList = document.getElementById('findingsList');
+    findingsList.innerHTML = concerns.map(concern => `
+        <div class="finding-item d-flex align-items-start mb-3">
+            <div class="finding-icon me-3 mt-1">
+                <i class="fas fa-circle text-primary" style="font-size: 0.5rem;"></i>
+            </div>
+            <div class="finding-content"><p class="mb-0">${concern}</p></div>
+        </div>
+    `).join('');
+    document.getElementById('clinicalFindings').style.display = 'block';
+}
+
+function updateRecommendations(recommendations) {
+    const recommendationsList = document.getElementById('recommendationsList');
+    recommendationsList.innerHTML = recommendations.map(rec => {
+        const recLower = rec.toLowerCase();
+        let iconClass = 'fas fa-check-circle text-success';
+        let itemClass = 'recommendation-item';
+        let textClass = '';
+
+        if (recLower.includes('urgent') || recLower.includes('immediate')) {
+            iconClass = 'fas fa-exclamation-circle text-danger';
+            itemClass += ' urgent';
+            textClass = 'text-danger fw-bold';
+        } else if (recLower.includes('consider') || recLower.includes('schedule') || recLower.includes('monitor')) {
+            iconClass = 'fas fa-clock text-warning';
+            itemClass += ' warning';
+        }
+        
+        return `
+            <div class="${itemClass} d-flex align-items-start mb-3">
+                <div class="recommendation-icon me-3 mt-1"><i class="${iconClass}"></i></div>
+                <div class="recommendation-content"><p class="mb-0 ${textClass}">${rec}</p></div>
+            </div>`;
+    }).join('');
+}
+
+function showEyeData(eyeData) {
+    const eyeDataContainer = document.getElementById('eyeDataContainer');
+    eyeDataContainer.innerHTML = eyeData.map(eye => `
+        <div class="col-md-6 mb-4">
+            <div class="eye-analysis-card">
+                <h6 class="mb-3 text-primary">${eye.label}</h6>
+                <div class="eye-metrics">
+                    ${Object.entries(eye.analysis).map(([key, value]) => {
+                        const colorClass = key === 'redness' ? 'danger' : key === 'yellowing' ? 'warning' : 'info';
+                        return `
+                        <div class="eye-metric d-flex justify-content-between align-items-center mb-2">
+                            <span class="metric-name text-capitalize">${key}:</span>
+                            <div class="metric-value d-flex align-items-center">
+                                <span class="badge bg-${colorClass} bg-opacity-10 text-${colorClass} me-2">${value.score.toFixed(1)}%</span>
+                                <small class="text-muted">(${value.severity})</small>
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+                ${eye.clinical_notes && eye.clinical_notes.length > 0 ? `
+                <div class="eye-notes mt-3">
+                    <small class="text-muted d-block mb-1">Clinical Notes:</small>
+                    ${eye.clinical_notes.map(note => `<small class="d-block text-dark">• ${note}</small>`).join('')}
+                </div>` : ''}
+            </div>
+        </div>
+    `).join('');
+    document.getElementById('eyeDataSection').style.display = 'block';
+}
+
+function showAIExplanation(explanation) {
+    document.getElementById('aiExplanationText').textContent = explanation;
+    document.getElementById('aiExplanationSection').style.display = 'block';
+}
+
+function updateTechnicalInfo(metadata) {
+    if (metadata) {
+        const analysisDate = new Date(metadata.analysis_timestamp).toLocaleString();
+        document.getElementById('analysisTimestamp').textContent = analysisDate;
+        document.getElementById('eyesDetected').textContent = metadata.eyes_detected;
+        document.getElementById('analysisInfo').textContent = `Analyzed ${metadata.eyes_detected} eye region(s) • ${analysisDate}`;
+    }
+}
+
+function showError(errorMessage) {
+    document.getElementById('errorMessage').textContent = errorMessage;
+    document.getElementById('errorSection').style.display = 'block';
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    if (analyzeBtn) {
+        analyzeBtn.innerHTML = '<i class="fas fa-microscope me-2"></i>Analyze Image';
+        analyzeBtn.disabled = false;
+    }
+    isAnalyzing = false;
+}
+
+// Doctor Feedback Functions
+function setupDoctorFeedbackForm() {
+    const form = document.getElementById('doctorFeedbackForm');
+    if (form) {
+        form.addEventListener('submit', handleDoctorFeedbackSubmit);
+    }
+}
+
+function handleDoctorFeedbackSubmit(e) {
+    e.preventDefault();
+    
+    const form = e.target;
+    const formData = new FormData(form);
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+    
+    fetch(`/doctor-feedback/${formData.get('image_id')}/`, {
+        method: 'POST',
+        body: formData,
+        // When using FormData, the browser sets the Content-Type header automatically.
+        // We only need to include the CSRF token header for Django.
+        headers: {
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        }
+    })
+    .then(async response => {
+        // CORRECTION 2: Improved error handling for the form submission.
+        // This helps debug backend issues by checking the server's response status.
+        if (!response.ok) {
+            // Try to get a more specific error from the response body if possible
+            const errorData = await response.json().catch(() => null);
+            const errorMessage = errorData?.error || `Server error: ${response.status} ${response.statusText}`;
+            throw new Error(errorMessage);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showNotification('Assessment saved successfully!', 'success');
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            // This will show a specific error if the backend provided one
+            showNotification(data.error || 'An unknown error occurred while saving.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Save Error:', error);
+        showNotification(error.message, 'error');
+    })
+    .finally(() => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+}
+
+function setupFileUpload() {
+    const fileInput = document.getElementById('reportFile');
+    if (fileInput) {
+        fileInput.addEventListener('change', previewFile);
+    }
+}
+
+function previewFile() {
+    const fileInput = document.getElementById('reportFile');
+    const filePreview = document.getElementById('filePreview');
+    const fileNameEl = document.getElementById('fileName');
+    
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        
+        if (file.type !== 'application/pdf') {
+            showNotification('Please select a PDF file.', 'error');
+            fileInput.value = '';
+            return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) { // 5MB
+            showNotification('File size must not exceed 5MB.', 'error');
+            fileInput.value = '';
+            return;
+        }
+        
+        fileNameEl.textContent = file.name;
+        filePreview.style.display = 'block';
+    } else {
+        filePreview.style.display = 'none';
+    }
+}
+
+function clearForm() {
+    const form = document.getElementById('doctorFeedbackForm');
+    if (form && confirm('Are you sure you want to clear the form?')) {
+        form.reset();
+        document.getElementById('filePreview').style.display = 'none';
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    const alertType = type === 'error' ? 'danger' : type;
+    notification.className = `alert alert-${alertType} alert-dismissible fade show`;
+    notification.setAttribute('role', 'alert');
+    notification.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}
